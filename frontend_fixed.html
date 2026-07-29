@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="hi" translate="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google" content="notranslate">
+    <title>Proper AI Tool - PDF Chat</title>
+    <style>
+        :root { --primary: #4F46E5; --bg-color: #f3f4f6; --chat-bg: #ffffff; --text-main: #1f2937; --border-color: #e5e7eb; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: sans-serif; }
+        body { background-color: var(--bg-color); height: 100vh; display: flex; }
+        .sidebar { width: 300px; background-color: #1e1e2f; color: white; display: flex; flex-direction: column; padding: 20px; }
+        .sidebar h2 { font-size: 1.2rem; margin-bottom: 20px; text-align: center; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        .upload-box { background: #2a2a40; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .upload-box input[type="file"] { width: 100%; margin-bottom: 10px; color: #ccc; }
+        .upload-btn { width: 100%; background: var(--primary); color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        #uploadStatus { font-size: 0.8rem; margin-top: 8px; text-align: center; }
+        .history-section { flex: 1; overflow-y: auto; }
+        .history-list { list-style: none; }
+        .history-item { background: #2a2a40; padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 0.85rem; cursor: pointer; }
+        .main-chat { flex: 1; display: flex; flex-direction: column; background: var(--chat-bg); }
+        .chat-header { padding: 20px; background: white; border-bottom: 1px solid var(--border-color); }
+        .chat-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .message { max-width: 75%; padding: 12px 16px; border-radius: 8px; line-height: 1.5; }
+        .user-message { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 0; }
+        .ai-message { align-self: flex-start; background: #f3f4f6; color: var(--text-main); border-bottom-left-radius: 0; border: 1px solid var(--border-color); }
+        .input-area { padding: 20px; background: white; border-top: 1px solid var(--border-color); display: flex; gap: 10px; }
+        .input-area input[type="text"] { flex: 1; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; outline: none; }
+        .send-btn { background: var(--primary); color: white; border: none; padding: 0 25px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>All in One AI Tool</h2>
+        <div class="upload-box">
+            <input type="file" id="pdfFile" accept=".pdf">
+            <button class="upload-btn" id="uploadBtn" onclick="uploadPDF()">Upload PDF</button>
+            <div id="uploadStatus"></div>
+        </div>
+        <div class="history-section">
+            <h3>Recent Chats</h3>
+            <ul class="history-list" id="historyList"></ul>
+        </div>
+    </div>
+    <div class="main-chat">
+        <div class="chat-header"><h1>Ask PDF</h1></div>
+        <div class="chat-box" id="chatBox">
+            <div class="message ai-message">PDF अपलोड करें और सवाल पूछें!</div>
+        </div>
+        <div class="input-area">
+            <input type="text" id="questionInput" placeholder="सवाल पूछें..." onkeypress="if(event.key==='Enter') { event.preventDefault(); askQuestion(); }">
+            <button class="send-btn" id="sendBtn" onclick="askQuestion()">Send</button>
+        </div>
+    </div>
+    <script>
+        const API_BASE = "http://127.0.0.1:8000";
+        
+        document.addEventListener("DOMContentLoaded", fetchHistory);
+
+        async function uploadPDF() {
+            const fileInput = document.getElementById('pdfFile');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const statusText = document.getElementById('uploadStatus');
+
+            if (fileInput.files.length === 0) {
+                alert("⚠️ कृपया पहले कोई PDF फाइल चुनें!");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            uploadBtn.innerText = 'Uploading...';
+            uploadBtn.disabled = true;
+            statusText.style.color = "#fbbf24";
+            statusText.innerText = "अपलोड हो रहा है... इंतज़ार करें";
+
+            try {
+                const response = await fetch(`${API_BASE}/upload`, { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    statusText.style.color = "#4ade80";
+                    statusText.innerText = "✅ " + data.message;
+                    alert("PDF Successfully Uploaded!");
+                } else {
+                    statusText.style.color = "#f87171";
+                    statusText.innerText = "❌ Error: " + data.detail;
+                }
+            } catch (error) {
+                statusText.style.color = "#f87171";
+                statusText.innerText = "❌ सर्वर कनेक्ट नहीं हुआ।";
+            } finally {
+                uploadBtn.innerText = 'Upload PDF';
+                uploadBtn.disabled = false;
+            }
+        }
+
+        async function askQuestion() {
+            const inputField = document.getElementById('questionInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const question = inputField.value.trim();
+
+            if (!question) return;
+
+            appendMessage('user', question);
+            inputField.value = '';
+            sendBtn.innerText = 'Sending...';
+            sendBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/ask`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    appendMessage('ai', data.ai_answer);
+                    fetchHistory();
+                } else {
+                    appendMessage('ai', '❌ Error: ' + data.detail);
+                }
+            } catch (error) {
+                appendMessage('ai', '❌ नेटवर्क एरर! बैकएंड चेक करें।');
+            } finally {
+                sendBtn.innerText = 'Send';
+                sendBtn.disabled = false;
+            }
+        }
+
+        function appendMessage(sender, text) {
+            const chatBox = document.getElementById('chatBox');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${sender === 'user' ? 'user-message' : 'ai-message'}`;
+            let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            formattedText = formattedText.replace(/\n/g, '<br>');
+            msgDiv.innerHTML = formattedText;
+            
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function fetchHistory() {
+            try {
+                const response = await fetch(`${API_BASE}/history`);
+                if (!response.ok) return;
+                const data = await response.json();
+                const historyList = document.getElementById('historyList');
+                historyList.innerHTML = ''; 
+                data.history.reverse().forEach(chat => {
+                    const li = document.createElement('li');
+                    li.className = 'history-item';
+                    li.innerText = chat.user_message;
+                    li.onclick = () => {
+                        appendMessage('user', chat.user_message);
+                        appendMessage('ai', chat.ai_response);
+                    };
+                    historyList.appendChild(li);
+                });
+            } catch (e) {}
+        }
+    </script>
+</body>
+</html>
