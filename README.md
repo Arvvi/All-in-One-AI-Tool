@@ -89,8 +89,3 @@ uvicorn main:app
 
 ---
 
-## 🤝 Contributing
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/your-username/proper-ai-tool/issues).
-
-## 📜 License
-This project is licensed under the [MIT License](LICENSE).
